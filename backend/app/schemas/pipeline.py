@@ -19,5 +19,8 @@ class DocumentProcessingResult(BaseModel):
     mrz: Optional[MRZResult] = Field(default=None, description="Parsed TD3 MRZ result if document is a Passport")
     metadata: MetadataResult
     validation: ValidationResult
+    validation_mode: str = Field(default="STRICT", description="Validation mode (STRICT or TEST_FIXTURE)")
+    is_synthetic_fixture: bool = Field(default=False, description="Flag indicating if document matched a registered test fixture")
+    fixture_info: Optional[Dict[str, Any]] = Field(default=None, description="Metadata of registered fixture if matched")
     evidence: List[EvidenceItem] = Field(default_factory=list, description="Common Evidence items")
     errors_or_warnings: List[str] = Field(default_factory=list, description="Execution notices, warnings, or errors")

@@ -24,6 +24,9 @@ from app.modules.mrz.service import MRZService
 from app.modules.metadata.analyzer import IsolatedMetadataAnalyzer
 from app.modules.validation.service import ValidationService
 from app.modules.evidence.dev1_converter import Developer1EvidenceConverter
+from app.modules.fixtures.registry import TestFixtureRegistry
+from app.schemas.validation import RuleStatus
+from app.core.config import settings
 from app.utils.file_utils import detect_file_format, get_mime_type, compute_sha256
 from app.core.logging import get_logger
 
@@ -209,6 +212,26 @@ class DocumentIntelligencePipeline:
             notices.append(f"Validation exception: {e}")
             validation = ValidationResult()
 
+        # Step 10B: Test Fixture Recognition (Development / Demo Mode Only)
+        is_fixture = False
+        fixture_meta = None
+        validation_mode = "STRICT"
+
+        if TestFixtureRegistry.is_fixture_mode_enabled():
+            is_fixture, fixture_meta = TestFixtureRegistry.lookup_fixture(file_path)
+            if is_fixture and fixture_meta:
+                validation_mode = "TEST_FIXTURE"
+                validation.validation_mode = "TEST_FIXTURE"
+                validation.is_synthetic_fixture = True
+                validation.fixture_id = fixture_meta.get("fixture_id")
+                validation.fixture_description = fixture_meta.get("description")
+                validation.raw_validation_status = validation.overall_status.value
+                # Override overall status to PASS specifically for the registered fixture
+                validation.overall_status = RuleStatus.PASS
+                logger.info(f"Document {doc_id} accepted via TEST_FIXTURE mode (Raw strict status: {validation.raw_validation_status})")
+        else:
+            logger.info(f"STRICT validation mode active for {doc_id} (DOCUMENT_VALIDATION_MODE={getattr(settings, 'DOCUMENT_VALIDATION_MODE', 'production')})")
+
         # Step 11: Common Evidence Standard Conversion
         try:
             evidence = Developer1EvidenceConverter.aggregate_dev1_evidence(
@@ -234,6 +257,9 @@ class DocumentIntelligencePipeline:
             mrz=mrz_result,
             metadata=metadata,
             validation=validation,
+            validation_mode=validation_mode,
+            is_synthetic_fixture=is_fixture,
+            fixture_info=fixture_meta,
             evidence=evidence,
             errors_or_warnings=notices
         )

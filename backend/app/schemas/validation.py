@@ -35,6 +35,11 @@ class RuleEvaluation(BaseModel):
 
 class ValidationResult(BaseModel):
     overall_status: RuleStatus = RuleStatus.PASS
+    validation_mode: str = "STRICT"  # "STRICT" or "TEST_FIXTURE"
+    is_synthetic_fixture: bool = False
+    fixture_id: Optional[str] = None
+    fixture_description: Optional[str] = None
+    raw_validation_status: Optional[str] = None
     format_valid: bool = True
     date_logic_valid: bool = True
     mrz_viz_consistent: bool = True
