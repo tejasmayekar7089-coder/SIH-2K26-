@@ -25,8 +25,8 @@ class EvidenceBundle(BaseModel):
     mrz_result: Optional[MRZResult] = None
     metadata_result: Optional[MetadataResult] = None
     validation_result: Optional[ValidationResult] = None
-    tamper_result: Optional[TamperResult] = None
-    field_mapping_result: Optional[FieldMappingResult] = None
+    tamper_result: Optional[Any] = None
+    field_mapping_result: Optional[Any] = None
     face_result: Optional[FaceResult] = None
     database_result: Optional[DatabaseResult] = None
     

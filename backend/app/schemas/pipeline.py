@@ -6,6 +6,7 @@ from app.modules.document_intelligence.ocr.schemas import OCRResult
 from app.schemas.mrz import MRZResult
 from app.schemas.metadata import MetadataResult
 from app.schemas.validation import ValidationResult
+from app.schemas.tampering import TamperResult
 from app.schemas.common import EvidenceItem
 
 class DocumentProcessingResult(BaseModel):
@@ -23,4 +24,5 @@ class DocumentProcessingResult(BaseModel):
     is_synthetic_fixture: bool = Field(default=False, description="Flag indicating if document matched a registered test fixture")
     fixture_info: Optional[Dict[str, Any]] = Field(default=None, description="Metadata of registered fixture if matched")
     evidence: List[EvidenceItem] = Field(default_factory=list, description="Common Evidence items")
+    tampering: Optional[TamperResult] = Field(default=None, description="Structured tampering detection result")
     errors_or_warnings: List[str] = Field(default_factory=list, description="Execution notices, warnings, or errors")

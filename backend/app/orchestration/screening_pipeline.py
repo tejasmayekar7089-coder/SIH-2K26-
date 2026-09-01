@@ -16,6 +16,8 @@ from app.modules.evidence.builder import EvidenceBuilderService
 from app.modules.hypothesis.engine import FraudHypothesisEngine
 from app.modules.risk.engine import RiskEngine
 from app.modules.audit.service import AuditTrailService
+from app.modules.fixtures.registry import TestFixtureRegistry
+from app.schemas.validation import RuleStatus
 from app.core.logging import get_logger
 
 logger = get_logger("pipeline_orchestrator")
@@ -65,13 +67,30 @@ class ScreeningPipelineOrchestrator:
                 extraction_result, mrz_result, metadata_result
             )
 
+            # Test Fixture Recognition (Development / Demo Mode Only)
+            if TestFixtureRegistry.is_fixture_mode_enabled() and doc_input.storage_path:
+                is_fixture, fixture_meta = TestFixtureRegistry.lookup_fixture(doc_input.storage_path)
+                if is_fixture and fixture_meta:
+                    validation_result.validation_mode = "TEST_FIXTURE"
+                    validation_result.is_synthetic_fixture = True
+                    validation_result.fixture_id = fixture_meta.get("fixture_id")
+                    validation_result.fixture_description = fixture_meta.get("description")
+                    validation_result.raw_validation_status = validation_result.overall_status.value
+                    validation_result.overall_status = RuleStatus.PASS
+                    logger.info(f"Document {doc_input.document_id} accepted via TEST_FIXTURE mode in screening pipeline")
+
             # Module 6: Tampering AI (Core AI Innovation)
-            tamper_result = self.tampering_service.analyze_tampering(doc_input, active_image_path)
+            from app.modules.tampering.service import run_tampering
+            tamper_result = run_tampering(active_image_path)
+            logger.debug(f"Tamper result: {tamper_result}")
 
             # Module 7: Field-Evidence Mapping
-            field_mapping_result = self.field_mapping_service.map_tamper_to_fields(
-                extraction_result, tamper_result
+            from app.modules.field_mapping.service import map_tampering_to_fields
+            field_mapping_result = map_tampering_to_fields(
+                tamper_regions=tamper_result.get("regions", []), 
+                extraction=extraction_result
             )
+            logger.debug(f"Field mapping result: {field_mapping_result}")
 
             # Module 8: Conditional 1:1 Face Verification
             face_result = self.face_service.verify_identity(doc_input, extraction_result)
@@ -110,6 +129,8 @@ class ScreeningPipelineOrchestrator:
                 risk_assessment=risk_assessment,
                 hypothesis_result=hypothesis_result,
                 evidence_bundle=evidence_bundle,
+                tampering=tamper_result,
+                field_mapping=field_mapping_result,
                 officer_action_state=OfficerAction.PENDING,
                 officer_statement="AI ASSISTS • OFFICER DECIDES"
             )

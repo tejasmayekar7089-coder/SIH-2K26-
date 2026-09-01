@@ -60,7 +60,8 @@ except ImportError:
         API_V1_STR: str = "/api/v1"
         ENVIRONMENT: str = "development"
         DEBUG: bool = True
-        
+        DOCUMENT_VALIDATION_MODE: str = os.getenv("DOCUMENT_VALIDATION_MODE", "production")
+
         # Server
         HOST: str = "0.0.0.0"
         PORT: int = 8000

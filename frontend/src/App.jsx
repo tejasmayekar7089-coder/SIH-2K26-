@@ -96,6 +96,8 @@ export default function App() {
         file: file.name,
         type: data.document_type || "UNKNOWN",
         validation: data.validation?.overall_status || "NOT_AVAILABLE",
+        validation_mode: data.validation_mode || data.validation?.validation_mode || "STRICT",
+        is_synthetic_fixture: !!(data.is_synthetic_fixture || data.validation?.is_synthetic_fixture),
         quality: `${Math.round((data.quality?.quality_score || 0) * 100)}%`,
         time: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
       };
@@ -109,7 +111,8 @@ export default function App() {
     }
   };
 
-  const badgeClass = (valStatus) => {
+  const badgeClass = (valStatus, isFixture, valMode) => {
+    if (isFixture || valMode === "TEST_FIXTURE") return "badge badge-fixture";
     if (valStatus === "PASS") return "badge badge-clear";
     if (valStatus === "INCONSISTENT") return "badge badge-review";
     return "badge badge-high";
@@ -219,23 +222,50 @@ export default function App() {
             </div>
 
             {/* Analysis Result Panel */}
-            {result && (
-              <div className="card result-panel" style={{ marginTop: "1rem" }}>
-                {/* Result Header Banner */}
-                <div className={`risk-banner ${result.validation?.overall_status === "PASS" ? "clear" : result.validation?.overall_status === "INCONSISTENT" ? "review" : "high-risk"}`}>
-                  <div className="risk-score-circle">
-                    {Math.round((result.quality?.quality_score || 0) * 100)}%
-                  </div>
-                  <div>
-                    <div className="risk-label">
-                      {result.validation?.overall_status === "PASS" ? "✓ VALIDATION PASSED" :
-                       result.validation?.overall_status === "INCONSISTENT" ? "⚠️ VALIDATION INCONSISTENT" : "❌ VALIDATION FAILED"}
+            {result && (() => {
+              const isFixture = !!(result.is_synthetic_fixture || result.validation?.is_synthetic_fixture || result.validation_mode === "TEST_FIXTURE" || result.validation?.validation_mode === "TEST_FIXTURE");
+              const bannerClass = isFixture ? "fixture" : (result.validation?.overall_status === "PASS" ? "clear" : result.validation?.overall_status === "INCONSISTENT" ? "review" : "high-risk");
+
+              return (
+                <div className="card result-panel" style={{ marginTop: "1rem" }}>
+                  {/* Result Header Banner */}
+                  <div className={`risk-banner ${bannerClass}`}>
+                    <div className="risk-score-circle">
+                      {Math.round((result.quality?.quality_score || 0) * 100)}%
                     </div>
-                    <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "2px" }}>
-                      Document: <strong>{result.document_type}</strong> | ID: <strong>{result.document_id}</strong> | Notice: Rule-Based Syntax & Checksum Validation ONLY
+                    <div>
+                      <div className="risk-label">
+                        {isFixture ? "🧪 DEMO / TEST FIXTURE — VALIDATION PASSED" :
+                         result.validation?.overall_status === "PASS" ? "✓ VALIDATION PASSED" :
+                         result.validation?.overall_status === "INCONSISTENT" ? "⚠️ VALIDATION INCONSISTENT" : "❌ VALIDATION FAILED"}
+                      </div>
+                      <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "2px" }}>
+                        Document: <strong>{result.document_type}</strong> | ID: <strong>{result.document_id}</strong> | Mode: <strong style={{ color: isFixture ? "#60a5fa" : "var(--accent-green)" }}>{isFixture ? "TEST_FIXTURE (Synthetic Hash Matched)" : "STRICT (Production)"}</strong>
+                      </div>
                     </div>
                   </div>
-                </div>
+
+                  {/* Test Fixture Callout Card */}
+                  {isFixture && (
+                    <div style={{ marginBottom: "1rem", padding: "0.85rem 1rem", background: "rgba(59, 130, 246, 0.08)", border: "1px solid rgba(59, 130, 246, 0.3)", borderRadius: "8px" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 700, color: "#60a5fa", fontSize: "0.85rem" }}>
+                          <span>🧪</span>
+                          <span>REGISTERED SYNTHETIC TEST FIXTURE (DEVELOPMENT MODE)</span>
+                        </div>
+                        <span style={{ fontSize: "0.72rem", background: "rgba(59,130,246,0.2)", color: "#93c5fd", padding: "2px 8px", borderRadius: "12px", border: "1px solid rgba(59,130,246,0.3)" }}>
+                          {result.fixture_info?.fixture_id || result.validation?.fixture_id || "SYNTH_PASSPORT_DEMO_01"}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "0.35rem", lineHeight: "1.4" }}>
+                        This synthetic document specimen was identified by deterministic SHA-256 file hash in development mode.
+                        Validation is reported as <strong>Validation Passed — Test Fixture</strong> while preserving all raw OCR extractions and diagnostic evaluations internally.
+                        {result.validation?.raw_validation_status && (
+                          <span> Raw strict mode evaluation: <strong style={{ color: "#f87171" }}>{result.validation.raw_validation_status}</strong>.</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                 {/* Developer 1 Metrics Summary Grid */}
                 <div className="evidence-grid" style={{ marginTop: "1rem" }}>
@@ -370,7 +400,8 @@ export default function App() {
                   💡 <strong>System Boundary Notice</strong>: Developer 1 produces extracted evidence and deterministic validation rules. AI Tampering Detection, 1:1 Face Verification, and Final Fraud Risk Assessment belong to Developer 2 modules.
                 </div>
               </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* Right Column: Pipeline Status + Recent History */}
@@ -426,7 +457,11 @@ export default function App() {
                         <td style={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{h.id}</td>
                         <td style={{ maxWidth: "100px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.file}</td>
                         <td>{h.type}</td>
-                        <td><span className={badgeClass(h.validation)}>{h.validation}</span></td>
+                        <td>
+                          <span className={badgeClass(h.validation, h.is_synthetic_fixture, h.validation_mode)}>
+                            {h.is_synthetic_fixture || h.validation_mode === "TEST_FIXTURE" ? "TEST_FIXTURE" : h.validation}
+                          </span>
+                        </td>
                         <td>{h.quality}</td>
                         <td>{h.time}</td>
                       </tr>

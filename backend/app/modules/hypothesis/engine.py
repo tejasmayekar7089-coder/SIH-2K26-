@@ -26,11 +26,14 @@ class FraudHypothesisEngine:
 
         # Hypothesis 1: Altered Field
         # Trigger: VIZ != MRZ or Tamper Overlap on crucial fields
-        if field_mapping and field_mapping.has_tampered_fields:
+        has_tampered_fields = any(item.get("risk") == "HIGH" for item in field_mapping) if field_mapping else False
+        highest_risk_field = next((item.get("field") for item in field_mapping if item.get("risk") == "HIGH"), "Unknown") if field_mapping else "Unknown"
+
+        if has_tampered_fields:
             hypotheses.append(FraudHypothesis(
                 hypothesis_type=HypothesisType.ALTERED_FIELD,
                 title="Suspected Document Text Alteration",
-                description=f"Pixel-level tampering detected overlapping with field: '{field_mapping.highest_risk_field}'.",
+                description=f"Pixel-level tampering detected overlapping with field: '{highest_risk_field}'.",
                 confidence=0.91,
                 severity=SeverityLevel.HIGH,
                 supporting_evidence_ids=["TAMPERING_AI", "FIELD_EVIDENCE_MAPPING"],
@@ -49,7 +52,9 @@ class FraudHypothesisEngine:
 
         # Hypothesis 2: Photo Replacement
         # Trigger: Tamper overlap on portrait region OR Face mismatch with high tampering
-        if face and face.match_status == FaceMatchStatus.MISMATCH and tampering and tampering.is_tampered:
+        is_tampered = tampering.get("status") != "GENUINE" if tampering else False
+
+        if face and face.match_status == FaceMatchStatus.MISMATCH and is_tampered:
             hypotheses.append(FraudHypothesis(
                 hypothesis_type=HypothesisType.PHOTO_REPLACEMENT,
                 title="Suspected Portrait Photo Replacement",
@@ -62,7 +67,7 @@ class FraudHypothesisEngine:
 
         # Hypothesis 3: Impersonation
         # Trigger: Document is authentic/clean, but live traveller does not match portrait
-        if face and face.match_status == FaceMatchStatus.MISMATCH and (not tampering or not tampering.is_tampered):
+        if face and face.match_status == FaceMatchStatus.MISMATCH and not is_tampered:
             hypotheses.append(FraudHypothesis(
                 hypothesis_type=HypothesisType.IMPERSONATION,
                 title="Possible Impersonation / Lookalike Fraud",

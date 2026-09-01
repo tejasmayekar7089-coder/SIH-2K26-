@@ -1,0 +1,145 @@
+{
+  "timestamp_utc": "2026-08-31T17:42:52.267867+00:00",
+  "document_id": "DOC-DEFB7C03",
+  "document_name": "DOC-DEFB7C03_test1.jpg",
+  "tamper_score": 1.0,
+  "status": "TAMPERED",
+  "severity": "HIGH",
+  "confidence": 1.0,
+  "regions": [
+    {
+      "region_id": "tamper_region_1",
+      "bounding_box": {
+        "x": 618,
+        "y": 714,
+        "width": 64,
+        "height": 25
+      },
+      "anomaly_score": 1.0,
+      "anomaly_type": "MANIPULATION"
+    },
+    {
+      "region_id": "tamper_region_2",
+      "bounding_box": {
+        "x": 551,
+        "y": 714,
+        "width": 53,
+        "height": 25
+      },
+      "anomaly_score": 1.0,
+      "anomaly_type": "MANIPULATION"
+    },
+    {
+      "region_id": "tamper_region_3",
+      "bounding_box": {
+        "x": 508,
+        "y": 573,
+        "width": 73,
+        "height": 33
+      },
+      "anomaly_score": 1.0,
+      "anomaly_type": "MANIPULATION"
+    },
+    {
+      "region_id": "tamper_region_4",
+      "bounding_box": {
+        "x": 267,
+        "y": 265,
+        "width": 79,
+        "height": 21
+      },
+      "anomaly_score": 1.0,
+      "anomaly_type": "MANIPULATION"
+    },
+    {
+      "region_id": "tamper_region_5",
+      "bounding_box": {
+        "x": 507,
+        "y": 252,
+        "width": 57,
+        "height": 32
+      },
+      "anomaly_score": 1.0,
+      "anomaly_type": "MANIPULATION"
+    },
+    {
+      "region_id": "tamper_region_6",
+      "bounding_box": {
+        "x": 384,
+        "y": 126,
+        "width": 45,
+        "height": 61
+      },
+      "anomaly_score": 1.0,
+      "anomaly_type": "MANIPULATION"
+    },
+    {
+      "region_id": "tamper_region_7",
+      "bounding_box": {
+        "x": 441,
+        "y": 124,
+        "width": 44,
+        "height": 63
+      },
+      "anomaly_score": 1.0,
+      "anomaly_type": "MANIPULATION"
+    },
+    {
+      "region_id": "tamper_region_8",
+      "bounding_box": {
+        "x": 508,
+        "y": 313,
+        "width": 74,
+        "height": 48
+      },
+      "anomaly_score": 0.9874,
+      "anomaly_type": "MANIPULATION"
+    },
+    {
+      "region_id": "tamper_region_9",
+      "bounding_box": {
+        "x": 499,
+        "y": 124,
+        "width": 52,
+        "height": 62
+      },
+      "anomaly_score": 0.961,
+      "anomaly_type": "MANIPULATION"
+    },
+    {
+      "region_id": "tamper_region_10",
+      "bounding_box": {
+        "x": 258,
+        "y": 124,
+        "width": 50,
+        "height": 62
+      },
+      "anomaly_score": 0.8776,
+      "anomaly_type": "MANIPULATION"
+    },
+    {
+      "region_id": "tamper_region_11",
+      "bounding_box": {
+        "x": 647,
+        "y": 126,
+        "width": 50,
+        "height": 61
+      },
+      "anomaly_score": 0.8514,
+      "anomaly_type": "MANIPULATION"
+    },
+    {
+      "region_id": "tamper_region_12",
+      "bounding_box": {
+        "x": 562,
+        "y": 125,
+        "width": 64,
+        "height": 62
+      },
+      "anomaly_score": 0.8366,
+      "anomaly_type": "MANIPULATION"
+    }
+  ],
+  "heatmap_image_path": "C:\\SIH-2K26-\\data\\outputs\\DOC-DEFB7C03_tamper_heatmap.jpg",
+  "mask_image_path": "C:\\SIH-2K26-\\data\\outputs\\DOC-DEFB7C03_tamper_mask.png"
+}

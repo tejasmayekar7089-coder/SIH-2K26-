@@ -35,21 +35,27 @@ class RiskEngine:
 
         # Dimension 1: Authenticity Signals (Tampering & Overlaps)
         authenticity_score = 0
-        if tamper and tamper.is_tampered:
-            authenticity_score += int(tamper.tamper_score * 40)
+        is_tampered = tamper.get("status") != "GENUINE" if tamper else False
+        if is_tampered:
+            score = tamper.get("tamper_score", 0.0)
+            sev = tamper.get("severity", "LOW")
+            authenticity_score += int(score * 40)
             reason_codes.append(ReasonCode(
                 code="TAMPER_ARTIFACTS_DETECTED",
-                description=f"Visual manipulation artifacts detected (Score: {tamper.tamper_score}).",
-                severity=SeverityLevel.HIGH,
+                description=f"Visual manipulation artifacts detected (Score: {score}, Severity: {sev}).",
+                severity=SeverityLevel[sev] if sev in {"LOW", "MEDIUM", "HIGH"} else SeverityLevel.HIGH,
                 module_source="TAMPERING_AI",
                 weight=25
             ))
-        
-        if fields and fields.has_tampered_fields:
-            authenticity_score += 35
+
+        has_tampered_fields = any(item.get("risk") == "HIGH" for item in fields) if fields else False
+        if has_tampered_fields:
+            highest_field = next((item.get("field") for item in fields if item.get("risk") == "HIGH"), "Unknown")
+            overlap_bonus = 35  # Since we map to "HIGH" risk if there is an overlap
+            authenticity_score += overlap_bonus
             reason_codes.append(ReasonCode(
-                code=f"TAMPER_OVERLAP_{fields.highest_risk_field.upper().replace(' ', '_')}",
-                description=f"Pixel-level tampering directly intersects with '{fields.highest_risk_field}'.",
+                code=f"TAMPER_OVERLAP_{highest_field.upper().replace(' ', '_')}",
+                description=f"Pixel-level tampering directly intersects with '{highest_field}' (HIGH).",
                 severity=SeverityLevel.HIGH,
                 module_source="FIELD_EVIDENCE_MAPPING",
                 weight=35

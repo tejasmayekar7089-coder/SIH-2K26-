@@ -1,0 +1,24 @@
+{
+  "timestamp_utc": "2026-08-31T17:06:49.322335+00:00",
+  "document_id": "DOC-PIPE-PASS",
+  "document_name": "test_pipe_5ecc3d60.png",
+  "tamper_score": 0.21,
+  "status": "CLEAR",
+  "severity": "LOW",
+  "confidence": 0.2081,
+  "regions": [
+    {
+      "region_id": "tamper_region_1",
+      "bounding_box": {
+        "x": 554,
+        "y": 0,
+        "width": 46,
+        "height": 47
+      },
+      "anomaly_score": 0.35,
+      "anomaly_type": "MANIPULATION"
+    }
+  ],
+  "heatmap_image_path": "C:\\SIH-2K26-\\data\\outputs\\DOC-PIPE-PASS_tamper_heatmap.jpg",
+  "mask_image_path": "C:\\SIH-2K26-\\data\\outputs\\DOC-PIPE-PASS_tamper_mask.png"
+}

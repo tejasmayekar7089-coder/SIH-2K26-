@@ -56,6 +56,8 @@ def test_pipeline_synthetic_aadhaar():
         assert res.extracted_fields.document_number.value == "2345 6789 0122"
         assert res.validation.overall_status in (RuleStatus.PASS, RuleStatus.INCONSISTENT)
         assert len(res.evidence) >= 3
+        assert res.tampering is not None
+        assert hasattr(res.tampering, "tamper_score")
 
         # Verify evidence items preserve field, data, confidence, bbox, provenance, reason_code
         num_evidence = next(e for e in res.evidence if e.data.get("field") == "aadhaar_number")

@@ -23,6 +23,7 @@ from app.modules.document_intelligence.extractors.passport import PassportFieldE
 from app.modules.mrz.service import MRZService
 from app.modules.metadata.analyzer import IsolatedMetadataAnalyzer
 from app.modules.validation.service import ValidationService
+from app.modules.tampering.service import TamperingAIService
 from app.modules.evidence.dev1_converter import Developer1EvidenceConverter
 from app.modules.fixtures.registry import TestFixtureRegistry
 from app.schemas.validation import RuleStatus
@@ -55,6 +56,7 @@ class DocumentIntelligencePipeline:
         self.mrz_service = mrz_service or MRZService()
         self.metadata_analyzer = metadata_analyzer or IsolatedMetadataAnalyzer()
         self.validation_service = validation_service or ValidationService()
+        self.tampering_service = TamperingAIService()
 
         self.extractors: Dict[DocumentCategory, BaseFieldExtractor] = {
             DocumentCategory.AADHAAR: AadhaarFieldExtractor(),
@@ -232,6 +234,15 @@ class DocumentIntelligencePipeline:
         else:
             logger.info(f"STRICT validation mode active for {doc_id} (DOCUMENT_VALIDATION_MODE={getattr(settings, 'DOCUMENT_VALIDATION_MODE', 'production')})")
 
+        tampering_result = None
+        try:
+            tampering_result = self.tampering_service.run_tampering(file_path, doc_input)
+            logger.debug("Tampering result for %s: %s", doc_id, tampering_result)
+        except Exception as e:
+            logger.exception(f"Tampering detection exception for {doc_id}: {e}")
+            notices.append(f"Tampering detection failed: {e}")
+            tampering_result = None
+
         # Step 11: Common Evidence Standard Conversion
         try:
             evidence = Developer1EvidenceConverter.aggregate_dev1_evidence(
@@ -261,6 +272,7 @@ class DocumentIntelligencePipeline:
             is_synthetic_fixture=is_fixture,
             fixture_info=fixture_meta,
             evidence=evidence,
+            tampering=tampering_result,
             errors_or_warnings=notices
         )
 
@@ -283,6 +295,7 @@ class DocumentIntelligencePipeline:
             metadata=metadata,
             validation=validation,
             evidence=[],
+            tampering=None,
             errors_or_warnings=[error_msg]
         )
 

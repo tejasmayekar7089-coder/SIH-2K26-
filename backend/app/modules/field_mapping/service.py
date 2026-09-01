@@ -1,98 +1,66 @@
-from typing import List, Dict, Optional
-import numpy as np
+from typing import List, Dict, Any
+import logging
 from app.schemas.extraction import ExtractionResult
-from app.schemas.tampering import TamperResult
-from app.schemas.field_mapping import FieldMappingResult, FieldTamperOverlap
-from app.schemas.common import SeverityLevel, BoundingBox
-from app.core.logging import get_logger
 
-logger = get_logger("field_mapping")
+logger = logging.getLogger("field_mapping")
 
-class FieldMappingService:
-    def __init__(self):
-        pass
-
-    def map_tamper_to_fields(
-        self,
-        extraction: ExtractionResult,
-        tamper_result: TamperResult
-    ) -> FieldMappingResult:
-        """Module 7: Field-Evidence Spatial Overlap Mapping."""
-        logger.info("Mapping tampering mask to extracted document fields")
-        
-        overlaps: List[FieldTamperOverlap] = []
-        
-        # Candidate fields to inspect
-        fields_to_check = [
-            ("Full Name", extraction.full_name),
-            ("Date of Birth", extraction.date_of_birth),
-            ("Document Number", extraction.document_number),
-            ("Expiry Date", extraction.expiry_date),
-            ("Nationality", extraction.nationality),
-        ]
-        
-        has_tampered_fields = False
-        highest_severity = SeverityLevel.LOW
-        highest_field = None
-
-        # If mask exists, calculate intersection ratio
-        mask = None
-        if tamper_result.mask_image_path:
-            try:
-                import cv2
-                raw_mask = cv2.imread(tamper_result.mask_image_path, cv2.IMREAD_GRAYSCALE)
-                if raw_mask is not None:
-                    mask = raw_mask > 128
-            except ImportError:
-                from PIL import Image
-                with Image.open(tamper_result.mask_image_path) as mask_img:
-                    mask = np.array(mask_img.convert('L')) > 128
-
-        for field_name, field_obj in fields_to_check:
-            if not field_obj or not field_obj.bounding_box:
-                continue
+def map_tampering_to_fields(tamper_regions: List[List[int]], extraction: ExtractionResult) -> List[Dict[str, str]]:
+    """
+    Map suspicious tampering regions to OCR fields to assess risk per field.
+    Returns a list of fields with their associated risk level.
+    """
+    logger.info("Mapping tampering mask to extracted document fields")
+    field_mapping_result = []
+    
+    # Extract fields from extraction result
+    fields_to_check = {
+        "Full Name": extraction.full_name,
+        "Date of Birth": extraction.date_of_birth,
+        "Document Number": extraction.document_number,
+        "Nationality": extraction.nationality,
+        "Gender": extraction.gender,
+        "Expiry Date": extraction.expiry_date,
+        "Issue Date": extraction.issue_date,
+        "Address": extraction.address
+    }
+    
+    for field_name, field_obj in fields_to_check.items():
+        if not field_obj or not field_obj.bbox:
+            continue
             
-            bbox = field_obj.bounding_box
-            overlap_ratio = 0.0
+        bx1, by1, bx2, by2 = field_obj.bbox
+        
+        risk = "LOW"
+        for region in tamper_regions:
+            rx1, ry1, rx2, ry2 = region
             
-            if mask is not None:
-                bx1, by1 = max(0, bbox.x), max(0, bbox.y)
-                bx2, by2 = min(mask.shape[1], bbox.x + bbox.width), min(mask.shape[0], bbox.y + bbox.height)
+            # Check overlap
+            ox1 = max(bx1, rx1)
+            oy1 = max(by1, ry1)
+            ox2 = min(bx2, rx2)
+            oy2 = min(by2, ry2)
+            
+            if ox2 > ox1 and oy2 > oy1:
+                risk = "HIGH"
+                break
                 
-                if bx2 > bx1 and by2 > by1:
-                    field_roi = mask[by1:by2, bx1:bx2]
-                    overlap_pixels = np.sum(field_roi)
-                    total_box_pixels = (bx2 - bx1) * (by2 - by1)
-                    overlap_ratio = float(overlap_pixels / total_box_pixels) if total_box_pixels > 0 else 0.0
-
-            # Determine risk tier based on overlap
-            if overlap_ratio >= 0.35:
-                risk = SeverityLevel.HIGH
-                reason_code = f"TAMPER_OVERLAP_{field_name.upper().replace(' ', '_')}"
-                has_tampered_fields = True
-                highest_severity = SeverityLevel.HIGH
-                highest_field = field_name
-            elif overlap_ratio >= 0.15:
-                risk = SeverityLevel.MEDIUM
-                reason_code = f"SUSPECT_OVERLAP_{field_name.upper().replace(' ', '_')}"
-                if highest_severity != SeverityLevel.HIGH:
-                    highest_severity = SeverityLevel.MEDIUM
-                    highest_field = field_name
-            else:
-                risk = SeverityLevel.LOW
-                reason_code = None
-
-            overlaps.append(FieldTamperOverlap(
-                field_name=field_name,
-                extracted_text=field_obj.value,
-                overlap_ratio=round(overlap_ratio, 3),
-                tamper_risk=risk,
-                reason_code=reason_code
-            ))
-
-        return FieldMappingResult(
-            field_overlaps=overlaps,
-            has_tampered_fields=has_tampered_fields,
-            highest_risk_field=highest_field,
-            highest_severity=highest_severity
-        )
+        field_mapping_result.append({"field": field_name, "risk": risk})
+        
+    # Check portrait
+    if extraction.portrait_bounding_box:
+        p_bbox = extraction.portrait_bounding_box
+        bx1, by1, bx2, by2 = p_bbox.x, p_bbox.y, p_bbox.x + p_bbox.width, p_bbox.y + p_bbox.height
+        risk = "LOW"
+        for region in tamper_regions:
+            rx1, ry1, rx2, ry2 = region
+            ox1 = max(bx1, rx1)
+            oy1 = max(by1, ry1)
+            ox2 = min(bx2, rx2)
+            oy2 = min(by2, ry2)
+            if ox2 > ox1 and oy2 > oy1:
+                risk = "HIGH"
+                break
+        field_mapping_result.append({"field": "Photo", "risk": risk})
+        
+    logger.info(f"Field mapping result: {field_mapping_result}")
+    return field_mapping_result

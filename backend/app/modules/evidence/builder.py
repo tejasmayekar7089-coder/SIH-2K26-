@@ -6,8 +6,6 @@ from app.schemas.extraction import ExtractionResult
 from app.schemas.mrz import MRZResult
 from app.schemas.metadata import MetadataResult
 from app.schemas.validation import ValidationResult, RuleStatus
-from app.schemas.tampering import TamperResult
-from app.schemas.field_mapping import FieldMappingResult
 from app.schemas.face import FaceResult, FaceMatchStatus
 from app.schemas.database import DatabaseResult, RegistryStatus
 from app.schemas.evidence import EvidenceBundle
@@ -28,8 +26,8 @@ class EvidenceBuilderService:
         mrz: Optional[MRZResult] = None,
         metadata: Optional[MetadataResult] = None,
         validation: Optional[ValidationResult] = None,
-        tampering: Optional[TamperResult] = None,
-        field_mapping: Optional[FieldMappingResult] = None,
+        tampering: Optional[Any] = None,
+        field_mapping: Optional[Any] = None,
         face: Optional[FaceResult] = None,
         database: Optional[DatabaseResult] = None
     ) -> EvidenceBundle:
@@ -47,26 +45,38 @@ class EvidenceBuilderService:
 
         # 2. Downstream Module Evidence Aggregation
         if tampering:
+            tamper_data = {
+                "tamper_score": tampering.get("tamper_score", 0),
+                "status": tampering.get("status", "UNKNOWN"),
+                "severity": tampering.get("severity", "LOW"),
+                "confidence": tampering.get("confidence", 0),
+                "model_used": "OpenCV",
+                "regions": tampering.get("regions", []),
+            }
             items.append(EvidenceItem(
                 source_module="TAMPERING_AI",
-                data={"tamper_score": tampering.tamper_score, "model_used": tampering.model_used.value},
-                confidence=0.88,
+                data=tamper_data,
+                confidence=float(tampering.get("confidence", 0)),
                 strength=0.90,
-                severity=SeverityLevel.HIGH if tampering.is_tampered else SeverityLevel.LOW,
-                provenance=f"Model: {tampering.model_used.value}",
-                reason_code="IMAGE_TAMPERING_DETECTED" if tampering.is_tampered else "NO_TAMPERING_DETECTED"
+                severity=SeverityLevel[tampering.get("severity", "LOW")] if tampering.get("severity") in {"LOW", "MEDIUM", "HIGH"} else SeverityLevel.LOW,
+                provenance="OpenCV Simple Detection",
+                reason_code="IMAGE_TAMPERING_DETECTED" if tampering.get("status") != "GENUINE" else "NO_TAMPERING_DETECTED",
+                timestamp_utc=datetime.now(timezone.utc)
             ))
 
-        if field_mapping and field_mapping.has_tampered_fields:
-            items.append(EvidenceItem(
-                source_module="FIELD_EVIDENCE_MAPPING",
-                data={"highest_field": field_mapping.highest_risk_field, "severity": field_mapping.highest_severity.value},
-                confidence=0.92,
-                strength=0.95,
-                severity=field_mapping.highest_severity,
-                provenance="Spatial IoU Mask-BBox Intersector v1.0",
-                reason_code="FIELD_TAMPERING_OVERLAP"
-            ))
+        if field_mapping:
+            has_high_risk = any(item.get("risk") == "HIGH" for item in field_mapping)
+            if has_high_risk:
+                highest_field = next((item.get("field") for item in field_mapping if item.get("risk") == "HIGH"), "Unknown")
+                items.append(EvidenceItem(
+                    source_module="FIELD_EVIDENCE_MAPPING",
+                    data={"highest_field": highest_field, "severity": "HIGH"},
+                    confidence=0.92,
+                    strength=0.95,
+                    severity=SeverityLevel.HIGH,
+                    provenance="Spatial IoU Mask-BBox Intersector",
+                    reason_code="FIELD_TAMPERING_OVERLAP"
+                ))
 
         if face and face.is_conditional_executed:
             items.append(EvidenceItem(

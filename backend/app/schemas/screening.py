@@ -31,5 +31,9 @@ class ScreeningResponse(BaseModel):
     hypothesis_result: Optional[HypothesisResult] = None
     evidence_bundle: Optional[EvidenceBundle] = None
     
+    # Newly added fields for UI activation
+    tampering: Optional[dict] = None
+    field_mapping: Optional[list] = None
+    
     officer_action_state: OfficerAction = OfficerAction.PENDING
     officer_statement: str = "AI ASSISTS • OFFICER DECIDES"

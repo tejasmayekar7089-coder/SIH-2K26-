@@ -235,6 +235,11 @@ body {
 .badge-clear { background: rgba(16,185,129,0.15); color: var(--accent-green); }
 .badge-review { background: rgba(245,158,11,0.15); color: var(--accent-amber); }
 .badge-high { background: rgba(239,68,68,0.15); color: var(--accent-red); }
+.badge-fixture { background: rgba(59,130,246,0.2); color: #60a5fa; border: 1px solid rgba(59,130,246,0.4); }
+
+.risk-banner.fixture { background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.4); }
+.risk-banner.fixture .risk-label { color: var(--accent-blue); }
+.risk-banner.fixture .risk-score-circle { background: rgba(59,130,246,0.25); color: #60a5fa; }
 
 /* --- Loader overlay -------------------------------- */
 .loader-bar {
