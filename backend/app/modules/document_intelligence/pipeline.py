@@ -37,7 +37,7 @@ class DocumentIntelligencePipeline:
     """
     Unified Developer 1 Document Intelligence Pipeline.
     Integrates Acquisition, Quality Analysis, Preprocessing, PaddleOCR, Document Classification,
-    Field Extraction, MRZ Processing, Metadata Analysis, Deterministic Validation, and Common Evidence output.
+    Field Extraction, MRZ Processing, Metadata Analysis, Deterministic Validation, Tampering AI Analysis, and Common Evidence output.
     """
 
     def __init__(
@@ -46,7 +46,8 @@ class DocumentIntelligencePipeline:
         classifier: Optional[BaseDocumentClassifier] = None,
         mrz_service: Optional[MRZService] = None,
         metadata_analyzer: Optional[IsolatedMetadataAnalyzer] = None,
-        validation_service: Optional[ValidationService] = None
+        validation_service: Optional[ValidationService] = None,
+        tampering_service: Optional[TamperingAIService] = None
     ):
         self.loader = DocumentLoader()
         self.quality_analyzer = QualityAnalyzer()
@@ -56,7 +57,7 @@ class DocumentIntelligencePipeline:
         self.mrz_service = mrz_service or MRZService()
         self.metadata_analyzer = metadata_analyzer or IsolatedMetadataAnalyzer()
         self.validation_service = validation_service or ValidationService()
-        self.tampering_service = TamperingAIService()
+        self.tampering_service = tampering_service or TamperingAIService()
 
         self.extractors: Dict[DocumentCategory, BaseFieldExtractor] = {
             DocumentCategory.AADHAAR: AadhaarFieldExtractor(),
@@ -110,6 +111,7 @@ class DocumentIntelligencePipeline:
             "file_size_bytes": doc_input.file_size_bytes,
             "sha256": doc_input.sha256_checksum
         }
+        logger.info(f"[UPLOAD] Processing document ID {doc_id}: {doc_input.file_name} ({doc_input.file_size_bytes} bytes)")
 
         # Step 2: Acquisition & Document Loading
         try:
@@ -117,42 +119,45 @@ class DocumentIntelligencePipeline:
             if not pages_rgb:
                 return self._build_controlled_error_result(doc_id, file_path, "Loader returned empty pages.")
             primary_img = pages_rgb[0]
+            logger.info(f"[IMAGE] Loaded image for {doc_id}: shape={primary_img.shape}")
         except Exception as e:
-            logger.error(f"Acquisition loader failure for {doc_id}: {e}")
+            logger.error(f"[IMAGE] Acquisition loader failure for {doc_id}: {e}")
             return self._build_controlled_error_result(doc_id, file_path, f"Document acquisition failed: {e}")
 
         # Step 3: Quality Analysis
         try:
             quality = self.quality_analyzer.analyze(primary_img)
-            logger.info(f"Quality evaluated for {doc_id}: score={quality.quality_score:.2f}, blurred={quality.is_blurred}")
+            logger.info(f"[IMAGE] Quality evaluated for {doc_id}: score={quality.quality_score:.2f}, blurred={quality.is_blurred}")
         except Exception as e:
-            logger.warning(f"Quality analysis exception for {doc_id}: {e}")
+            logger.warning(f"[IMAGE] Quality analysis exception for {doc_id}: {e}")
             notices.append(f"Quality analysis failed: {e}")
             quality = QualityResult(quality_score=0.50, blur_score=100.0, is_acceptable=True)
 
         # Step 4: Non-Destructive Preprocessing
         try:
             prep_img = self.preprocessor.preprocess(primary_img)
+            logger.info(f"[PREPROCESS] Non-destructive preprocessing complete for {doc_id}")
         except Exception as e:
-            logger.warning(f"Preprocessing exception for {doc_id}: {e}")
+            logger.warning(f"[PREPROCESS] Preprocessing exception for {doc_id}: {e}")
             notices.append(f"Preprocessing skipped due to exception: {e}")
             prep_img = primary_img
 
-        # Step 5: OCR Recognition (PaddleOCR)
+        # Step 5: OCR Recognition (PaddleOCR / RapidOCR)
         try:
+            logger.info(f"[OCR] Processing image for doc ID: {doc_id}...")
             ocr_result = self.ocr_engine.process_image(prep_img, page_index=0)
-            logger.info(f"OCR completed for {doc_id}: found {len(ocr_result.items)} text items (mean confidence={ocr_result.mean_confidence:.2f})")
+            logger.info(f"[OCR RESULT] OCR completed for {doc_id}: Detections={len(ocr_result.items)}, Raw text length={len(ocr_result.full_text)}, Mean confidence={ocr_result.mean_confidence:.2f}")
         except Exception as e:
-            logger.error(f"OCR engine failure for {doc_id}: {e}")
+            logger.error(f"[OCR RESULT] OCR engine failure for {doc_id}: {e}")
             notices.append(f"OCR engine error: {e}")
             ocr_result = OCRResult(items=[], full_text="", mean_confidence=0.0)
 
         # Step 6: Document Classification
         try:
             doc_category, cat_conf = self.classifier.classify(ocr_result, prep_img)
-            logger.info(f"Document classified for {doc_id}: category={doc_category.value}, confidence={cat_conf:.2f}")
+            logger.info(f"[CLASSIFICATION] Document classified for {doc_id}: category={doc_category.value}, confidence={cat_conf:.2f}")
         except Exception as e:
-            logger.warning(f"Classification exception for {doc_id}: {e}")
+            logger.warning(f"[CLASSIFICATION] Classification exception for {doc_id}: {e}")
             doc_category, cat_conf = DocumentCategory.UNKNOWN, 0.0
 
         # Step 7: Document-Specific Field Extraction (Aadhaar / Driving Licence / Passport / Controlled UNKNOWN)
@@ -164,12 +169,12 @@ class DocumentIntelligencePipeline:
                 extraction.category_confidence = cat_conf
                 self._log_extraction_summary_safely(doc_id, doc_category, extraction)
             except Exception as e:
-                logger.error(f"Field extraction exception for {doc_id}: {e}")
+                logger.error(f"[FIELD EXTRACTION] Field extraction exception for {doc_id}: {e}")
                 notices.append(f"Field extraction exception: {e}")
                 extraction = ExtractionResult(document_category=doc_category, category_confidence=cat_conf, raw_text=ocr_result.full_text)
         else:
             # Controlled UNKNOWN response without crashing
-            logger.info(f"Category '{doc_category.value}' has no specialized extractor. Returning generic OCR extraction.")
+            logger.info(f"[FIELD EXTRACTION] Category '{doc_category.value}' has no specialized extractor. Returning generic OCR extraction.")
             extraction = ExtractionResult(
                 document_category=doc_category,
                 category_confidence=cat_conf,
@@ -182,17 +187,17 @@ class DocumentIntelligencePipeline:
         if doc_category == DocumentCategory.PASSPORT:
             try:
                 mrz_result = self.mrz_service.process_passport_mrz(ocr_result, extraction)
-                logger.info(f"MRZ processing finished for {doc_id}: present={mrz_result.is_present}, format={mrz_result.mrz_format.value}, valid_checksums={mrz_result.all_check_digits_valid}")
+                logger.info(f"[MRZ] MRZ processing finished for {doc_id}: present={mrz_result.is_present}, format={mrz_result.mrz_format.value}, valid_checksums={mrz_result.all_check_digits_valid}")
             except Exception as e:
-                logger.warning(f"MRZ processing exception for {doc_id}: {e}")
+                logger.warning(f"[MRZ] MRZ processing exception for {doc_id}: {e}")
                 notices.append(f"MRZ processing failed: {e}")
 
         # Step 9: Digital File & EXIF Metadata Analysis
         try:
             metadata = self.metadata_analyzer.analyze_file(file_path, document_id=doc_id)
-            logger.info(f"Metadata analysis for {doc_id}: classification={metadata.metadata_classification.value}")
+            logger.info(f"[METADATA] Metadata analysis for {doc_id}: classification={metadata.metadata_classification.value}")
         except Exception as e:
-            logger.warning(f"Metadata analysis exception for {doc_id}: {e}")
+            logger.warning(f"[METADATA] Metadata analysis exception for {doc_id}: {e}")
             notices.append(f"Metadata analysis failed: {e}")
             metadata = MetadataResult(
                 file_type=doc_input.file_format.value,
@@ -208,7 +213,7 @@ class DocumentIntelligencePipeline:
                 metadata=metadata,
                 quality=quality
             )
-            logger.info(f"Validation completed for {doc_id}: status={validation.overall_status.value}, failures={validation.failure_count}, inconsistencies={validation.inconsistency_count}")
+            logger.info(f"[VALIDATION] Validation completed for {doc_id}: status={validation.overall_status.value}, failures={validation.failure_count}, inconsistencies={validation.inconsistency_count}")
         except Exception as e:
             logger.error(f"Deterministic validation exception for {doc_id}: {e}")
             notices.append(f"Validation exception: {e}")
@@ -234,14 +239,22 @@ class DocumentIntelligencePipeline:
         else:
             logger.info(f"STRICT validation mode active for {doc_id} (DOCUMENT_VALIDATION_MODE={getattr(settings, 'DOCUMENT_VALIDATION_MODE', 'production')})")
 
+        # Step 10C: Image-Level Tampering AI Analysis & OCR Field Correlation
         tampering_result = None
         try:
-            tampering_result = self.tampering_service.run_tampering(file_path, doc_input)
-            logger.debug("Tampering result for %s: %s", doc_id, tampering_result)
+            tampering_result = self.tampering_service.analyze_tampering(
+                doc=doc_input,
+                image_input=prep_img,
+                ocr_result=ocr_result,
+                extraction=extraction
+            )
+            logger.info(
+                f"[TAMPERING AI] Analysis complete for {doc_id}: detected={tampering_result.tampering_detected}, "
+                f"confidence={tampering_result.confidence:.2f}, risk={tampering_result.risk_level}"
+            )
         except Exception as e:
-            logger.exception(f"Tampering detection exception for {doc_id}: {e}")
-            notices.append(f"Tampering detection failed: {e}")
-            tampering_result = None
+            logger.warning(f"[TAMPERING AI] Tampering analysis exception for {doc_id}: {e}")
+            notices.append(f"Tampering analysis failed: {e}")
 
         # Step 11: Common Evidence Standard Conversion
         try:
@@ -252,6 +265,9 @@ class DocumentIntelligencePipeline:
                 metadata=metadata,
                 validation=validation
             )
+            # Append tampering evidence items if present
+            if tampering_result and tampering_result.evidence:
+                evidence.extend(tampering_result.evidence)
             logger.info(f"Generated {len(evidence)} common evidence items for {doc_id}")
         except Exception as e:
             logger.error(f"Evidence conversion exception for {doc_id}: {e}")
@@ -268,11 +284,11 @@ class DocumentIntelligencePipeline:
             mrz=mrz_result,
             metadata=metadata,
             validation=validation,
+            tampering=tampering_result,
             validation_mode=validation_mode,
             is_synthetic_fixture=is_fixture,
             fixture_info=fixture_meta,
             evidence=evidence,
-            tampering=tampering_result,
             errors_or_warnings=notices
         )
 
@@ -295,7 +311,6 @@ class DocumentIntelligencePipeline:
             metadata=metadata,
             validation=validation,
             evidence=[],
-            tampering=None,
             errors_or_warnings=[error_msg]
         )
 

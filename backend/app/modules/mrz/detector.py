@@ -10,8 +10,8 @@ logger = get_logger("mrz_detector")
 class MRZDetector:
     """Detects and isolates TD3 MRZ lines from OCR results or image bounding boxes."""
 
-    MRZ_LINE1_RE = re.compile(r'P[A-Z0-9<]{43}')
-    MRZ_LINE2_RE = re.compile(r'[A-Z0-9<]{44}')
+    MRZ_LINE1_RE = re.compile(r'P[A-Z0-9<]{40,43}')
+    MRZ_LINE2_RE = re.compile(r'[A-Z0-9<]{40,44}')
     MRZ_LOOSE_RE = re.compile(r'[A-Z0-9<]{30,44}')
 
     def detect_mrz(self, ocr_result: OCRResult) -> Tuple[List[str], Optional[BoundingBox]]:
@@ -22,42 +22,67 @@ class MRZDetector:
         if not ocr_result or not ocr_result.items:
             return [], None
 
-        found_lines: List[Tuple[int, str, Optional[BoundingBox]]] = []
+        found_lines: List[Tuple[int, float, str, Optional[BoundingBox]]] = []
 
         # 1. Clean OCR items and check for MRZ patterns
         for idx, item in enumerate(ocr_result.items):
-            cleaned_text = re.sub(r'\s+', '', item.text.upper())
-            # Replace common OCR misreads in MRZ text (e.g. spaces, « to <)
-            cleaned_text = cleaned_text.replace("«", "<").replace("<<", "<")
+            raw_text = item.text.upper().strip()
+            # Replace spaces and common OCR misreads in MRZ text
+            cleaned_text = re.sub(r'\s+', '', raw_text)
+            cleaned_text = cleaned_text.replace("«", "<").replace("{", "<").replace("}", "<").replace("(", "<").replace(")", "<")
+            # Replace common OCR misreads in MRZ prefix if needed
+            if cleaned_text.startswith("P(") or cleaned_text.startswith("P[") or cleaned_text.startswith("P{"):
+                cleaned_text = "P<" + cleaned_text[2:]
 
-            if self.MRZ_LINE1_RE.search(cleaned_text):
-                found_lines.append((idx, self.MRZ_LINE1_RE.search(cleaned_text).group(0), item.bounding_box))
-            elif self.MRZ_LINE2_RE.search(cleaned_text):
-                found_lines.append((idx, self.MRZ_LINE2_RE.search(cleaned_text).group(0), item.bounding_box))
+            y_pos = item.bounding_box.y if item.bounding_box else float(idx)
+
+            # Check for TD3 Line 1 (starts with P and contains fillers <)
+            if cleaned_text.startswith("P<") or cleaned_text.startswith("P") and "<" in cleaned_text:
+                if len(cleaned_text) >= 30:
+                    # Pad to 44 chars if needed
+                    padded = cleaned_text[:44].ljust(44, '<')
+                    found_lines.append((idx, y_pos, padded, item.bounding_box))
+                    continue
+
+            # Check for TD3 Line 2 (Passport number + checksums + dates)
+            if len(cleaned_text) >= 30 and "<" in cleaned_text and not cleaned_text.startswith("P<"):
+                # Must contain numbers and fillers
+                num_digits = sum(c.isdigit() for c in cleaned_text)
+                if num_digits >= 6:
+                    padded = cleaned_text[:44].ljust(44, '<')
+                    found_lines.append((idx, y_pos, padded, item.bounding_box))
 
         if len(found_lines) >= 2:
-            # Sort by Y position or item index
-            found_lines.sort(key=lambda x: x[0])
-            raw_lines = [line[1] for line in found_lines[:2]]
-            bbox = self._merge_bounding_boxes([line[2] for line in found_lines[:2] if line[2]])
-            logger.info(f"MRZDetector found {len(raw_lines)} TD3 MRZ lines via OCR pattern match.")
+            # Sort by Y position to ensure Line 1 (top) is before Line 2 (bottom)
+            found_lines.sort(key=lambda x: (x[1], x[0]))
+            line1 = found_lines[0][2]
+            line2 = found_lines[1][2]
+            
+            # Ensure line1 starts with P< if line2 does not
+            if not line1.startswith("P") and line2.startswith("P"):
+                line1, line2 = line2, line1
+
+            raw_lines = [line1, line2]
+            bboxes = [f[3] for f in found_lines[:2] if f[3] is not None]
+            bbox = self._merge_bounding_boxes(bboxes)
+            logger.info(f"[MRZ] MRZDetector found 2 TD3 MRZ lines via OCR pattern match: Line1={line1[:15]}..., Line2={line2[:15]}...")
             return raw_lines, bbox
 
-        # 2. Fallback heuristic: search bottom 30% of items for MRZ character sequences
+        # 2. Fallback heuristic: search bottom items for MRZ character sequences
         bottom_items = [
             it for it in ocr_result.items
-            if self.MRZ_LOOSE_RE.search(it.text.replace(" ", ""))
+            if self.MRZ_LOOSE_RE.search(re.sub(r'\s+', '', it.text.upper()).replace("«", "<"))
         ]
 
         if len(bottom_items) >= 2:
-            raw_lines = [re.sub(r'\s+', '', it.text.upper()) for it in bottom_items[:2]]
-            # Pad or trim to 44 chars if needed
+            raw_lines = [re.sub(r'\s+', '', it.text.upper()).replace("«", "<") for it in bottom_items[:2]]
             raw_lines = [line[:44].ljust(44, '<') for line in raw_lines]
-            bbox = self._merge_bounding_boxes([it.bounding_box for it in bottom_items[:2] if it.bounding_box])
-            logger.info("MRZDetector found MRZ lines via fallback bottom-cluster heuristic.")
+            bboxes = [it.bounding_box for it in bottom_items[:2] if it.bounding_box]
+            bbox = self._merge_bounding_boxes(bboxes)
+            logger.info(f"[MRZ] MRZDetector found MRZ lines via fallback heuristic.")
             return raw_lines, bbox
 
-        logger.info("MRZDetector: No valid MRZ lines detected.")
+        logger.info("[MRZ] MRZDetector: No valid MRZ lines detected.")
         return [], None
 
     def _merge_bounding_boxes(self, bboxes: List[BoundingBox]) -> Optional[BoundingBox]:
@@ -73,3 +98,4 @@ class MRZDetector:
             width=max(x2s) - min(xs),
             height=max(y2s) - min(ys)
         )
+

@@ -39,7 +39,8 @@ app.add_middleware(
 
 # Mount outputs for previewing heatmaps & processed images
 os.makedirs(settings.OUTPUT_DIR, exist_ok=True)
-app.mount("/static/outputs", StaticFiles(directory=settings.OUTPUT_DIR), name="outputs")
+app.mount("/static/outputs", StaticFiles(directory=settings.OUTPUT_DIR), name="outputs_static")
+app.mount("/outputs", StaticFiles(directory=settings.OUTPUT_DIR), name="outputs_direct")
 
 # Include central API router
 app.include_router(api_router, prefix=settings.API_V1_STR)

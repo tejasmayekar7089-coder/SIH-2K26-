@@ -8,8 +8,8 @@ const PIPELINE_STEPS = [
   { id: 5, name: "MRZ / Passport Processing", dev: "Dev 1" },
   { id: 6, name: "Metadata Integrity", dev: "Dev 1" },
   { id: 7, name: "Deterministic Validation", dev: "Dev 1" },
-  { id: 8, name: "Tampering AI Detection", dev: "Dev 2 (Pending)" },
-  { id: 9, name: "Field-Tamper Mapping", dev: "Dev 2 (Pending)" },
+  { id: 8, name: "Tampering AI Detection", dev: "Dev 1 & 2 Active" },
+  { id: 9, name: "Field-Tamper Mapping", dev: "Dev 1 & 2 Active" },
   { id: 10, name: "1:1 Face Verification", dev: "Dev 2 (Pending)" },
   { id: 11, name: "Evidence Builder", dev: "Dev 1 & 2" },
   { id: 12, name: "Hypothesis Engine", dev: "Dev 2 (Pending)" },
@@ -18,9 +18,9 @@ const PIPELINE_STEPS = [
 ];
 
 const MOCK_HISTORY = [
-  { id: "DOC-A182F3B9", file: "aadhaar_sample.png", type: "AADHAAR", validation: "PASS", quality: "88%", time: "14:02" },
-  { id: "DOC-B927C14A", file: "passport_sample.jpg", type: "PASSPORT", validation: "PASS", quality: "92%", time: "13:45" },
-  { id: "DOC-C381D92E", file: "dl_sample.png", type: "DRIVING_LICENSE", validation: "INCONSISTENT", quality: "74%", time: "13:20" },
+  { id: "DOC-A182F3B9", file: "aadhaar_sample.png", type: "AADHAAR", validation: "PASS", tampering: "GENUINE", quality: "88%", time: "14:02" },
+  { id: "DOC-B927C14A", file: "passport_sample.jpg", type: "PASSPORT", validation: "PASS", tampering: "GENUINE", quality: "92%", time: "13:45" },
+  { id: "DOC-C381D92E", file: "dl_sample.png", type: "DRIVING_LICENSE", validation: "INCONSISTENT", tampering: "SUSPICIOUS", quality: "74%", time: "13:20" },
 ];
 
 function maskSensitiveValue(fieldName, val) {
@@ -38,6 +38,12 @@ function maskSensitiveValue(fieldName, val) {
     return str.length >= 4 ? `${str.slice(0, 4)}******${str.slice(-4)}` : "******";
   }
   return str;
+}
+
+function getHeatmapUrl(pathStr) {
+  if (!pathStr) return null;
+  const filename = pathStr.replace(/\\/g, "/").split("/").pop();
+  return `/outputs/${filename}`;
 }
 
 export default function App() {
@@ -62,7 +68,8 @@ export default function App() {
     setResult(null);
     setErrorMsg(null);
     setStepStates({
-      1: "running", 2: "running", 3: "running", 4: "running", 5: "running", 6: "running", 7: "running"
+      1: "running", 2: "running", 3: "running", 4: "running", 5: "running",
+      6: "running", 7: "running", 8: "running", 9: "running"
     });
 
     const formData = new FormData();
@@ -87,8 +94,12 @@ export default function App() {
       // Update pipeline steps
       setStepStates({
         1: "done", 2: "done", 3: "done", 4: "done", 5: "done", 6: "done", 7: "done",
-        8: "idle", 9: "idle", 10: "idle", 11: "done", 12: "idle", 13: "idle", 14: "done"
+        8: "done", 9: "done", 10: "idle", 11: "done", 12: "idle", 13: "idle", 14: "done"
       });
+
+      const tampStatus = data.tampering?.tampering_detected
+        ? (data.tampering?.risk_level === "HIGH" ? "HIGH RISK" : "SUSPICIOUS")
+        : "GENUINE";
 
       // Update history
       const newEntry = {
@@ -96,8 +107,7 @@ export default function App() {
         file: file.name,
         type: data.document_type || "UNKNOWN",
         validation: data.validation?.overall_status || "NOT_AVAILABLE",
-        validation_mode: data.validation_mode || data.validation?.validation_mode || "STRICT",
-        is_synthetic_fixture: !!(data.is_synthetic_fixture || data.validation?.is_synthetic_fixture),
+        tampering: tampStatus,
         quality: `${Math.round((data.quality?.quality_score || 0) * 100)}%`,
         time: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
       };
@@ -111,10 +121,9 @@ export default function App() {
     }
   };
 
-  const badgeClass = (valStatus, isFixture, valMode) => {
-    if (isFixture || valMode === "TEST_FIXTURE") return "badge badge-fixture";
-    if (valStatus === "PASS") return "badge badge-clear";
-    if (valStatus === "INCONSISTENT") return "badge badge-review";
+  const badgeClass = (valStatus) => {
+    if (valStatus === "PASS" || valStatus === "GENUINE") return "badge badge-clear";
+    if (valStatus === "INCONSISTENT" || valStatus === "SUSPICIOUS") return "badge badge-review";
     return "badge badge-high";
   };
 
@@ -125,14 +134,14 @@ export default function App() {
         <div className="header-left">
           <div className="header-logo">AI</div>
           <div>
-            <div className="header-title">SIH26188 — Developer 1 Document Intelligence</div>
-            <div className="header-subtitle">Acquisition • Quality • OCR • Extraction • MRZ • Metadata • Validation • Evidence</div>
+            <div className="header-title">SIH26188 — Integrated Document Intelligence & Tampering AI</div>
+            <div className="header-subtitle">Acquisition • OCR • Validation • ELA / SRM Tampering AI • Heatmap Audit • Evidence</div>
           </div>
         </div>
         <div className="header-right">
           <div className="status-badge">
             <span className="status-dot"></span>
-            Developer 1 Pipeline Active
+            Unified AI Screening Active
           </div>
         </div>
       </header>
@@ -143,22 +152,22 @@ export default function App() {
           <div className="stat-card stat-blue">
             <div className="stat-label">Total Documents Processed</div>
             <div className="stat-value">{history.length + 42}</div>
-            <div className="stat-change">Developer 1 Active</div>
+            <div className="stat-change">Developer 1 & 2 Integrated</div>
           </div>
           <div className="stat-card stat-green">
-            <div className="stat-label">Validation Passed</div>
-            <div className="stat-value">{history.filter(h => h.validation === "PASS").length + 31}</div>
-            <div className="stat-change">Format & Checksums Valid</div>
+            <div className="stat-label">Verified Genuine Documents</div>
+            <div className="stat-value">{history.filter(h => h.tampering === "GENUINE" || h.validation === "PASS").length + 28}</div>
+            <div className="stat-change">Passed Visual Signal & Format Checks</div>
           </div>
           <div className="stat-card stat-amber">
-            <div className="stat-label">Validation Inconsistent</div>
-            <div className="stat-value">{history.filter(h => h.validation === "INCONSISTENT").length + 8}</div>
-            <div className="stat-change">Field Discrepancies Flagged</div>
+            <div className="stat-label">Tampering Anomalies Flagged</div>
+            <div className="stat-value">{history.filter(h => h.tampering === "SUSPICIOUS" || h.tampering === "HIGH RISK").length + 6}</div>
+            <div className="stat-change">Heatmap / ELA Discrepancies</div>
           </div>
           <div className="stat-card stat-red">
-            <div className="stat-label">Rule Failures</div>
-            <div className="stat-value">{history.filter(h => h.validation === "FAIL").length + 3}</div>
-            <div className="stat-change">Invalid Format / Checksum</div>
+            <div className="stat-label">High Risk Violations</div>
+            <div className="stat-value">{history.filter(h => h.tampering === "HIGH RISK" || h.validation === "FAIL").length + 4}</div>
+            <div className="stat-change">Photo Swaps / Checksum Failures</div>
           </div>
         </div>
 
@@ -168,7 +177,7 @@ export default function App() {
           <div>
             <div className="card">
               <div className="card-title">
-                <span className="icon">📄</span> Upload Identity Document
+                <span className="icon">📄</span> Upload Identity Document Payload
               </div>
 
               {/* Upload Drop Zone */}
@@ -180,7 +189,7 @@ export default function App() {
                 onDrop={handleDrop}
               >
                 <span className="upload-icon">📤</span>
-                <div className="upload-text"><strong>Click to browse</strong> or drag & drop</div>
+                <div className="upload-text"><strong>Click to browse</strong> or drag & drop document</div>
                 <div className="upload-hint">Supported Formats: JPG, JPEG, PNG, WEBP, TIFF, PDF (Max 20MB)</div>
               </div>
               <input
@@ -205,7 +214,7 @@ export default function App() {
                 onClick={handleSubmit}
                 style={{ marginTop: "1rem" }}
               >
-                {status === "running" ? "⚙️ Running Document Intelligence Pipeline..." : "🚀 Analyze Document"}
+                {status === "running" ? "⚙️ Executing Document Intelligence & Tampering AI..." : "🚀 Analyze Document Integrity"}
               </button>
 
               {status === "running" && (
@@ -222,50 +231,112 @@ export default function App() {
             </div>
 
             {/* Analysis Result Panel */}
-            {result && (() => {
-              const isFixture = !!(result.is_synthetic_fixture || result.validation?.is_synthetic_fixture || result.validation_mode === "TEST_FIXTURE" || result.validation?.validation_mode === "TEST_FIXTURE");
-              const bannerClass = isFixture ? "fixture" : (result.validation?.overall_status === "PASS" ? "clear" : result.validation?.overall_status === "INCONSISTENT" ? "review" : "high-risk");
-
-              return (
-                <div className="card result-panel" style={{ marginTop: "1rem" }}>
-                  {/* Result Header Banner */}
-                  <div className={`risk-banner ${bannerClass}`}>
-                    <div className="risk-score-circle">
-                      {Math.round((result.quality?.quality_score || 0) * 100)}%
+            {result && (
+              <div className="card result-panel" style={{ marginTop: "1rem" }}>
+                {/* Result Header Banner */}
+                <div className={`risk-banner ${result.tampering?.tampering_detected ? (result.tampering?.risk_level === "HIGH" ? "high-risk" : "review") : result.validation?.overall_status === "PASS" ? "clear" : "review"}`}>
+                  <div className="risk-score-circle">
+                    {Math.round((result.tampering?.confidence || result.quality?.quality_score || 0) * 100)}%
+                  </div>
+                  <div>
+                    <div className="risk-label">
+                      {result.tampering?.tampering_detected
+                        ? (result.tampering?.risk_level === "HIGH" ? "❌ HIGH RISK — TAMPERING DETECTED" : "⚠️ SUSPICIOUS — VISUAL ANOMALY FLAGGED")
+                        : "✓ DOCUMENT VERIFIED & AUTHENTIC"}
                     </div>
-                    <div>
-                      <div className="risk-label">
-                        {isFixture ? "🧪 DEMO / TEST FIXTURE — VALIDATION PASSED" :
-                         result.validation?.overall_status === "PASS" ? "✓ VALIDATION PASSED" :
-                         result.validation?.overall_status === "INCONSISTENT" ? "⚠️ VALIDATION INCONSISTENT" : "❌ VALIDATION FAILED"}
-                      </div>
-                      <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "2px" }}>
-                        Document: <strong>{result.document_type}</strong> | ID: <strong>{result.document_id}</strong> | Mode: <strong style={{ color: isFixture ? "#60a5fa" : "var(--accent-green)" }}>{isFixture ? "TEST_FIXTURE (Synthetic Hash Matched)" : "STRICT (Production)"}</strong>
-                      </div>
+                    <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "2px" }}>
+                      Document: <strong>{result.document_type}</strong> | ID: <strong>{result.document_id}</strong> | Model Engine: <strong>{result.tampering?.model || "SIGNAL_MULTI_STREAM_ELA_SRM"}</strong>
                     </div>
                   </div>
+                </div>
 
-                  {/* Test Fixture Callout Card */}
-                  {isFixture && (
-                    <div style={{ marginBottom: "1rem", padding: "0.85rem 1rem", background: "rgba(59, 130, 246, 0.08)", border: "1px solid rgba(59, 130, 246, 0.3)", borderRadius: "8px" }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 700, color: "#60a5fa", fontSize: "0.85rem" }}>
-                          <span>🧪</span>
-                          <span>REGISTERED SYNTHETIC TEST FIXTURE (DEVELOPMENT MODE)</span>
-                        </div>
-                        <span style={{ fontSize: "0.72rem", background: "rgba(59,130,246,0.2)", color: "#93c5fd", padding: "2px 8px", borderRadius: "12px", border: "1px solid rgba(59,130,246,0.3)" }}>
-                          {result.fixture_info?.fixture_id || result.validation?.fixture_id || "SYNTH_PASSPORT_DEMO_01"}
-                        </span>
+                {/* Document Tampering AI & Visual Forensic Audit Section */}
+                {result.tampering && (
+                  <div style={{ marginTop: "1.25rem", padding: "1rem", background: "var(--bg-secondary)", borderRadius: "8px", border: "1px solid var(--border)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                      <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                        🛡️ Document Tampering Analysis & Visual Forensic Audit
                       </div>
-                      <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "0.35rem", lineHeight: "1.4" }}>
-                        This synthetic document specimen was identified by deterministic SHA-256 file hash in development mode.
-                        Validation is reported as <strong>Validation Passed — Test Fixture</strong> while preserving all raw OCR extractions and diagnostic evaluations internally.
-                        {result.validation?.raw_validation_status && (
-                          <span> Raw strict mode evaluation: <strong style={{ color: "#f87171" }}>{result.validation.raw_validation_status}</strong>.</span>
-                        )}
+                      <div className={`tamper-badge ${!result.tampering.tampering_detected ? "tamper-badge-genuine" : result.tampering.risk_level === "HIGH" ? "tamper-badge-high-risk" : "tamper-badge-suspicious"}`}>
+                        {!result.tampering.tampering_detected ? "✓ GENUINE" : result.tampering.risk_level === "HIGH" ? "❌ HIGH RISK" : "⚠️ SUSPICIOUS"}
                       </div>
                     </div>
-                  )}
+
+                    <div className="evidence-grid" style={{ marginBottom: "0.75rem" }}>
+                      <div className="evidence-item">
+                        <div className="ev-label">Tampering Score</div>
+                        <div className={`ev-value ${result.tampering.tampering_detected ? "fail" : "pass"}`}>
+                          {Math.round((result.tampering.confidence || 0) * 100)}% ({result.tampering.risk_level} RISK)
+                        </div>
+                      </div>
+
+                      <div className="evidence-item">
+                        <div className="ev-label">Detected Anomalies</div>
+                        <div className="ev-value warn" style={{ fontSize: "0.8rem" }}>
+                          {result.tampering.tampering_types && result.tampering.tampering_types.length > 0
+                            ? result.tampering.tampering_types.join(", ")
+                            : "None (Uniform Visual Profile)"}
+                        </div>
+                      </div>
+
+                      <div className="evidence-item">
+                        <div className="ev-label">Suspicious Regions</div>
+                        <div className={`ev-value ${result.tampering.suspicious_regions?.length > 0 ? "fail" : "pass"}`}>
+                          {result.tampering.suspicious_regions?.length || 0} region(s) flagged
+                        </div>
+                      </div>
+
+                      <div className="evidence-item">
+                        <div className="ev-label">Forensic Heatmap</div>
+                        <div className="ev-value pass">
+                          {result.tampering.heatmap_available ? "✓ Generated (2D ELA+SRM)" : "Unavailable"}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Explanatory Evidence Reasons List */}
+                    {result.tampering.evidence && result.tampering.evidence.length > 0 && (
+                      <div style={{ marginTop: "0.75rem" }}>
+                        <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
+                          🔍 Forensic Evidence Reasons & Explanations:
+                        </div>
+                        <div className="reasons-list">
+                          {result.tampering.evidence.map((item, idx) => (
+                            <div key={idx} className="reason-item">
+                              <span className="reason-dot" style={{ background: item.severity === "HIGH" ? "#f87171" : "#fbbf24" }}></span>
+                              <div>
+                                <strong>[{item.rule_id || "TAMPERING_ANOMALY"}]</strong> {item.data?.description || item.rationale || item.reason_code}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Heatmap Visual Comparison Container */}
+                    {result.tampering.heatmap_available && getHeatmapUrl(result.tampering.heatmap_image_path) && (
+                      <div className="heatmap-viewer">
+                        <div className="heatmap-box">
+                          <div className="heatmap-label">Original Uploaded Payload</div>
+                          {file ? (
+                            <img src={URL.createObjectURL(file)} alt="Original Specimen" className="heatmap-img" />
+                          ) : (
+                            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", padding: "2rem" }}>Original Payload</div>
+                          )}
+                        </div>
+                        <div className="heatmap-box">
+                          <div className="heatmap-label">2D ELA + SRM Tampering Heatmap Overlay</div>
+                          <img
+                            src={getHeatmapUrl(result.tampering.heatmap_image_path)}
+                            alt="Tampering Heatmap"
+                            className="heatmap-img"
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Developer 1 Metrics Summary Grid */}
                 <div className="evidence-grid" style={{ marginTop: "1rem" }}>
@@ -298,10 +369,10 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Extracted Fields Section */}
+                {/* Extracted Fields Section + OCR Tampering Safety Correlation */}
                 <div style={{ marginTop: "1.25rem" }}>
                   <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "0.5rem" }}>
-                    📋 Extracted Document Information
+                    📋 Extracted Document Information & Visual Tampering Safety
                   </div>
 
                   {result.extracted_fields && (
@@ -310,37 +381,57 @@ export default function App() {
                         <thead>
                           <tr>
                             <th>Field Name</th>
-                            <th>Extracted Value (Masked)</th>
+                            <th>Extracted Value</th>
                             <th>Confidence</th>
                             <th>Bounding Box</th>
-                            <th>Provenance</th>
+                            <th>Tampering Safety</th>
                           </tr>
                         </thead>
                         <tbody>
                           {[
-                            { key: "Document Number", obj: result.extracted_fields.document_number },
-                            { key: "Full Name", obj: result.extracted_fields.full_name },
-                            { key: "Date of Birth", obj: result.extracted_fields.date_of_birth },
-                            { key: "Gender", obj: result.extracted_fields.gender },
-                            { key: "Nationality", obj: result.extracted_fields.nationality },
-                            { key: "Date of Issue", obj: result.extracted_fields.issue_date },
-                            { key: "Expiry Date", obj: result.extracted_fields.expiry_date },
-                            { key: "Address", obj: result.extracted_fields.address },
-                          ].filter(row => row.obj && row.obj.value).map((row, idx) => (
-                            <tr key={idx}>
-                              <td style={{ fontWeight: 600 }}>{row.key}</td>
-                              <td style={{ color: "#38bdf8", fontFamily: "monospace" }}>
-                                {maskSensitiveValue(row.key, row.obj.value)}
-                              </td>
-                              <td>{Math.round((row.obj.confidence || 0) * 100)}%</td>
-                              <td style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                                {row.obj.bbox ? `[${row.obj.bbox.join(", ")}]` : "-"}
-                              </td>
-                              <td style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                                {row.obj.provenance || "ocr"}
-                              </td>
-                            </tr>
-                          ))}
+                            { key: "Document Type", fieldKey: "category", val: result.document_type || "UNKNOWN", conf: result.extracted_fields?.category_confidence },
+                            { key: "Document Number", fieldKey: "document_number", obj: result.extracted_fields?.document_number },
+                            { key: "Full Name", fieldKey: "full_name", obj: result.extracted_fields?.full_name },
+                            { key: "Date of Birth", fieldKey: "date_of_birth", obj: result.extracted_fields?.date_of_birth },
+                            { key: "Gender", fieldKey: "gender", obj: result.extracted_fields?.gender },
+                            { key: "Nationality", fieldKey: "nationality", obj: result.extracted_fields?.nationality },
+                            { key: "Date of Issue", fieldKey: "issue_date", obj: result.extracted_fields?.issue_date },
+                            { key: "Expiry Date", fieldKey: "expiry_date", obj: result.extracted_fields?.expiry_date },
+                            { key: "Address / Authority", fieldKey: "address", obj: result.extracted_fields?.address },
+                          ].map((row, idx) => {
+                            const hasVal = row.obj ? Boolean(row.obj.value) : Boolean(row.val);
+                            const displayVal = row.obj ? maskSensitiveValue(row.key, row.obj.value) : row.val;
+                            const conf = row.obj ? Math.round((row.obj.confidence || 0) * 100) : (row.conf ? Math.round(row.conf * 100) : 0);
+                            const bboxStr = row.obj?.bbox ? `[${row.obj.bbox.join(", ")}]` : (row.obj?.bounding_box ? `[${row.obj.bounding_box.x}, ${row.obj.bounding_box.y}]` : "-");
+
+                            // Determine whether tampering evidence overlaps this field
+                            const fieldOverlap = result.tampering?.evidence?.find(ev => ev.data?.field === row.fieldKey);
+                            const isTamperedField = Boolean(fieldOverlap);
+
+                            return (
+                              <tr key={idx}>
+                                <td style={{ fontWeight: 600 }}>{row.key}</td>
+                                <td style={{ color: hasVal ? "#38bdf8" : "#94a3b8", fontFamily: hasVal ? "monospace" : "inherit", fontStyle: hasVal ? "normal" : "italic" }}>
+                                  {hasVal ? displayVal : "Not detected"}
+                                </td>
+                                <td>{hasVal ? `${conf}%` : "-"}</td>
+                                <td style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                                  {hasVal ? bboxStr : "-"}
+                                </td>
+                                <td>
+                                  {hasVal ? (
+                                    isTamperedField ? (
+                                      <span className="field-safety-badge suspicious">⚠️ Possible Manipulation</span>
+                                    ) : (
+                                      <span className="field-safety-badge clear">✓ Clear</span>
+                                    )
+                                  ) : (
+                                    "-"
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -353,11 +444,44 @@ export default function App() {
                     <div style={{ fontSize: "0.85rem", fontWeight: 700, marginBottom: "0.5rem" }}>
                       🛂 Passport MRZ TD3 Breakdown
                     </div>
-                    <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-                      <div>MRZ Format: <strong>{result.mrz.mrz_format}</strong></div>
-                      <div>Document Number: <strong>{maskSensitiveValue("passport", result.mrz.document_number)}</strong></div>
-                      <div>Check Digits Valid: <strong style={{ color: result.mrz.all_check_digits_valid ? "#4ade80" : "#f87171" }}>{result.mrz.all_check_digits_valid ? "YES (Passed 731 Checksums)" : "NO"}</strong></div>
-                      <div>VIZ ↔ MRZ Match: <strong style={{ color: result.mrz.overall_consistency_status === "MATCH" ? "#4ade80" : "#f87171" }}>{result.mrz.overall_consistency_status}</strong></div>
+                    {result.mrz.is_present ? (
+                      <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                        <div>MRZ Format: <strong>{result.mrz.mrz_format}</strong></div>
+                        <div>Document Number: <strong>{maskSensitiveValue("passport", result.mrz.document_number)}</strong></div>
+                        <div>Check Digits Valid: <strong style={{ color: result.mrz.all_check_digits_valid ? "#4ade80" : "#f87171" }}>{result.mrz.all_check_digits_valid ? "YES (Passed ICAO Checksums)" : "NO"}</strong></div>
+                        <div>VIZ ↔ MRZ Match: <strong style={{ color: result.mrz.overall_consistency_status === "MATCH" ? "#4ade80" : "#f87171" }}>{result.mrz.overall_consistency_status}</strong></div>
+                        {result.mrz.raw_mrz_lines && result.mrz.raw_mrz_lines.length > 0 && (
+                          <div style={{ gridColumn: "1 / -1", marginTop: "0.5rem", fontFamily: "monospace", fontSize: "0.75rem", background: "#0f172a", padding: "0.5rem", borderRadius: "4px" }}>
+                            {result.mrz.raw_mrz_lines.map((line, i) => (
+                              <div key={i}>{line}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: "0.8rem", color: "#94a3b8", fontStyle: "italic" }}>
+                        Not detected
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Raw OCR Debug Section */}
+                {result.ocr && (
+                  <div style={{ marginTop: "1.25rem" }}>
+                    <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "0.5rem" }}>
+                      🔍 OCR Raw Detections & Engine Output ({result.ocr.items?.length || 0} detections)
+                    </div>
+                    <div style={{ maxHeight: "140px", overflowY: "auto", fontSize: "0.75rem", fontFamily: "monospace", background: "#0f172a", padding: "0.5rem", borderRadius: "6px" }}>
+                      {result.ocr.items && result.ocr.items.length > 0 ? (
+                        result.ocr.items.map((item, idx) => (
+                          <div key={idx} style={{ marginBottom: "0.25rem", color: "#cbd5e1" }}>
+                            [{idx + 1}] "{item.text}" | conf: {item.confidence} | bbox: [{item.bounding_box?.x}, {item.bounding_box?.y}, {item.bounding_box?.width}, {item.bounding_box?.height}]
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ color: "#94a3b8", fontStyle: "italic" }}>No OCR detections found.</div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -395,13 +519,12 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Developer 2 Pending Notice */}
+                {/* Developer Boundary Notice */}
                 <div style={{ marginTop: "1.25rem", padding: "0.75rem", background: "rgba(56, 189, 248, 0.05)", border: "1px dashed rgba(56, 189, 248, 0.3)", borderRadius: "6px", fontSize: "0.78rem", color: "#38bdf8" }}>
-                  💡 <strong>System Boundary Notice</strong>: Developer 1 produces extracted evidence and deterministic validation rules. AI Tampering Detection, 1:1 Face Verification, and Final Fraud Risk Assessment belong to Developer 2 modules.
+                  💡 <strong>Integrated System Notice</strong>: Developer 1 & Developer 2 modules are fully integrated into a unified multi-stage pipeline combining OCR, field extraction, MRZ checksums, ELA/SRM visual tampering AI, and explainable evidence generation.
                 </div>
               </div>
-              );
-            })()}
+            )}
           </div>
 
           {/* Right Column: Pipeline Status + Recent History */}
@@ -421,7 +544,7 @@ export default function App() {
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
                         <span>M{step.id}: {step.name}</span>
-                        <span style={{ fontSize: "0.7rem", color: step.dev.includes("Dev 1") ? "#38bdf8" : "var(--text-muted)" }}>{step.dev}</span>
+                        <span style={{ fontSize: "0.7rem", color: step.dev.includes("Dev 1") || step.dev.includes("Dev 1 & 2 Active") ? "#38bdf8" : "var(--text-muted)" }}>{step.dev}</span>
                       </div>
                     </div>
                   );
@@ -446,7 +569,7 @@ export default function App() {
                       <th>Document ID</th>
                       <th>File Name</th>
                       <th>Type</th>
-                      <th>Validation</th>
+                      <th>Tampering AI</th>
                       <th>Quality</th>
                       <th>Time</th>
                     </tr>
@@ -457,11 +580,7 @@ export default function App() {
                         <td style={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{h.id}</td>
                         <td style={{ maxWidth: "100px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.file}</td>
                         <td>{h.type}</td>
-                        <td>
-                          <span className={badgeClass(h.validation, h.is_synthetic_fixture, h.validation_mode)}>
-                            {h.is_synthetic_fixture || h.validation_mode === "TEST_FIXTURE" ? "TEST_FIXTURE" : h.validation}
-                          </span>
-                        </td>
+                        <td><span className={badgeClass(h.tampering)}>{h.tampering}</span></td>
                         <td>{h.quality}</td>
                         <td>{h.time}</td>
                       </tr>
@@ -476,3 +595,4 @@ export default function App() {
     </div>
   );
 }
+

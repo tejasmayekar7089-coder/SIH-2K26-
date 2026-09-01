@@ -42,7 +42,11 @@ try:
         # Algorithmic Thresholds
         QUALITY_MIN_SCORE: float = 0.60
         FACE_MATCH_THRESHOLD: float = 0.65
-        TAMPER_ALERT_THRESHOLD: float = 0.45
+        TAMPER_ALERT_THRESHOLD: float = 0.35
+        TAMPER_HIGH_RISK_THRESHOLD: float = 0.70
+        TAMPER_ELA_QUALITY: int = 90
+        TAMPER_SRM_WEIGHT: float = 0.40
+        TAMPER_CONTOUR_MIN_AREA: int = 150
         RISK_THRESHOLD_CLEAR: int = 29
         RISK_THRESHOLD_REVIEW: int = 69
         
@@ -92,7 +96,11 @@ except ImportError:
         # Algorithmic Thresholds
         QUALITY_MIN_SCORE: float = 0.60
         FACE_MATCH_THRESHOLD: float = 0.65
-        TAMPER_ALERT_THRESHOLD: float = 0.45
+        TAMPER_ALERT_THRESHOLD: float = 0.35
+        TAMPER_HIGH_RISK_THRESHOLD: float = 0.70
+        TAMPER_ELA_QUALITY: int = 90
+        TAMPER_SRM_WEIGHT: float = 0.40
+        TAMPER_CONTOUR_MIN_AREA: int = 150
         RISK_THRESHOLD_CLEAR: int = 29
         RISK_THRESHOLD_REVIEW: int = 69
 

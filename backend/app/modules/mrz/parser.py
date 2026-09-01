@@ -5,6 +5,11 @@ from app.core.logging import get_logger
 
 logger = get_logger("mrz_parser")
 
+def _normalize_mrz_digits(s: str) -> str:
+    """Normalizes common OCR misreads in numeric slots (dates, check digits)."""
+    trans = str.maketrans({"O": "0", "o": "0", "I": "1", "l": "1", "i": "1", "S": "5", "s": "5", "B": "8", "Z": "2", "G": "6"})
+    return s.translate(trans)
+
 class ParsedMRZData:
     def __init__(self,
                  mrz_format: MRZFormat = MRZFormat.TD3,
@@ -47,7 +52,7 @@ class TD3MRZParser:
 
     @staticmethod
     def parse(raw_lines: List[str]) -> ParsedMRZData:
-        """Parse raw 2-line MRZ string list into ParsedMRZData."""
+        """Parse raw 2-line MRZ string list into ParsedMRZData with safe OCR normalization."""
         if not raw_lines or len(raw_lines) < 2:
             logger.warning("TD3MRZParser received fewer than 2 MRZ lines.")
             return ParsedMRZData(mrz_format=MRZFormat.NONE)
@@ -78,20 +83,29 @@ class TD3MRZParser:
         # 42..43: Optional Check Digit (1 char)
         # 43..44: Composite Check Digit (1 char)
         passport_num_raw = line2[0:9]
-        passport_num = passport_num_raw.replace("<", "")
-        pass_cd = line2[9:10]
-        nationality = line2[10:13].replace("<", "")
-        dob = line2[13:19]
-        dob_cd = line2[19:20]
-        sex = line2[20:21].replace("<", "U")
-        expiry = line2[21:27]
-        expiry_cd = line2[27:28]
+        passport_num = passport_num_raw.replace("<", "").upper()
+        
+        # Check digit, DOB, Expiry normalization
+        pass_cd = _normalize_mrz_digits(line2[9:10])
+        nationality = line2[10:13].replace("<", "").upper()
+        
+        dob = _normalize_mrz_digits(line2[13:19])
+        dob_cd = _normalize_mrz_digits(line2[19:20])
+        
+        sex = line2[20:21].upper()
+        if sex not in ["M", "F", "X"]:
+            sex = "M" if "M" in sex else ("F" if "F" in sex else "<")
+        sex = sex.replace("<", "U")
+
+        expiry = _normalize_mrz_digits(line2[21:27])
+        expiry_cd = _normalize_mrz_digits(line2[27:28])
+        
         optional_raw = line2[28:42]
         optional_data = optional_raw.replace("<", "")
-        optional_cd = line2[42:43]
-        composite_cd = line2[43:44]
+        optional_cd = _normalize_mrz_digits(line2[42:43])
+        composite_cd = _normalize_mrz_digits(line2[43:44])
 
-        logger.info(f"TD3MRZParser successfully parsed MRZ for doc {passport_num} ({surname}, {given_names})")
+        logger.info(f"[MRZ] TD3MRZParser parsed MRZ for doc {passport_num} ({surname}, {given_names})")
 
         return ParsedMRZData(
             mrz_format=MRZFormat.TD3,

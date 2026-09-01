@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List, Dict
 from PIL import Image, ImageOps
 
 try:
@@ -22,13 +22,13 @@ class ImagePreprocessor:
                    image_rgb: np.ndarray,
                    deskew_angle: float = 0.0,
                    enhance_contrast: bool = True,
-                   denoise: bool = True) -> np.ndarray:
+                   denoise: bool = False) -> np.ndarray:
         """
         Safely preprocess image without aggressively altering original features.
         - Correct orientation/rotation if angle provided
         - Resize preserving aspect ratio
         - Contrast enhancement via CLAHE
-        - Subtle denoising
+        - Subtle denoising (disabled by default to prevent blurring fine MRZ text)
         """
         if image_rgb is None or image_rgb.size == 0:
             return image_rgb
@@ -46,11 +46,51 @@ class ImagePreprocessor:
         if enhance_contrast and HAS_CV2:
             img = self.apply_clahe_rgb(img)
 
-        # 4. Light Denoising preserving text edges
+        # 4. Light Denoising preserving text edges (only if explicitly enabled)
         if denoise and HAS_CV2:
-            img = cv2.fastNlMeansDenoisingColored(img, None, 3, 3, 7, 21)
+            try:
+                img = cv2.fastNlMeansDenoisingColored(img, None, 3, 3, 7, 21)
+            except Exception:
+                pass
 
         return img
+
+    def get_preprocessing_variants(self, image_rgb: np.ndarray) -> List[Tuple[str, np.ndarray]]:
+        """
+        Generates multiple non-destructive preprocessing image variants for OCR fallback retries:
+        1. original / resized
+        2. contrast enhanced (CLAHE)
+        3. grayscale
+        4. sharpened
+        """
+        if image_rgb is None or image_rgb.size == 0:
+            return [("original", image_rgb)]
+
+        variants: List[Tuple[str, np.ndarray]] = []
+        
+        # Base resized image
+        base = self.resize_max_dimension(image_rgb, self.max_dimension)
+        variants.append(("original", base))
+
+        # CLAHE contrast enhanced
+        if HAS_CV2:
+            clahe_img = self.apply_clahe_rgb(base)
+            variants.append(("contrast_clahe", clahe_img))
+
+        # Sharpened
+        sharpened_img = self.sharpen_image(base)
+        variants.append(("sharpened", sharpened_img))
+
+        # Grayscale
+        gray_img = self.to_grayscale(base)
+        # Convert back to 3-channel RGB for engine consistency
+        if len(gray_img.shape) == 2:
+            gray_rgb = np.stack([gray_img] * 3, axis=-1)
+        else:
+            gray_rgb = gray_img
+        variants.append(("grayscale", gray_rgb))
+
+        return variants
 
     @staticmethod
     def rotate_image(image_rgb: np.ndarray, angle_degrees: float) -> np.ndarray:
@@ -110,3 +150,15 @@ class ImagePreprocessor:
             return cv2.cvtColor(limg, cv2.COLOR_LAB2RGB)
         except Exception:
             return image_rgb
+
+    @staticmethod
+    def sharpen_image(image_rgb: np.ndarray) -> np.ndarray:
+        """Apply light unsharp mask sharpening filter."""
+        if not HAS_CV2:
+            return image_rgb
+        try:
+            kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], dtype=np.float32)
+            return cv2.filter2D(image_rgb, -1, kernel)
+        except Exception:
+            return image_rgb
+

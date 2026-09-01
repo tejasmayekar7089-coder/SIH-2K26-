@@ -262,3 +262,40 @@ body {
   .header { padding: 0 1rem; }
   .main { padding: 1rem; }
 }
+
+/* --- Document Tampering Analysis Styles ------------ */
+.tamper-badge {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.35rem 0.85rem; border-radius: 20px;
+  font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.tamper-badge-genuine { background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.4); color: var(--accent-green); }
+.tamper-badge-suspicious { background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.4); color: var(--accent-amber); }
+.tamper-badge-high-risk { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: var(--accent-red); }
+.tamper-badge-inconclusive { background: rgba(148,163,184,0.15); border: 1px solid rgba(148,163,184,0.3); color: var(--text-secondary); }
+
+.tamper-tag-list { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+.tamper-tag {
+  padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.72rem; font-weight: 600;
+  background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-secondary);
+}
+.tamper-tag.highlight { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: #f87171; }
+
+.heatmap-viewer {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;
+  background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem;
+}
+.heatmap-box { text-align: center; }
+.heatmap-label { font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem; }
+.heatmap-img {
+  width: 100%; max-height: 220px; object-fit: contain; border-radius: 6px;
+  border: 1px solid var(--border); background: #000;
+}
+
+.field-safety-badge {
+  display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.15rem 0.5rem;
+  border-radius: 4px; font-size: 0.72rem; font-weight: 600;
+}
+.field-safety-badge.clear { background: rgba(16,185,129,0.15); color: #4ade80; }
+.field-safety-badge.suspicious { background: rgba(239,68,68,0.15); color: #f87171; }
+
